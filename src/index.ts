@@ -236,6 +236,7 @@ app.get('/generateMnemoricPhrase', async (req, res) => {
 });
 
 app.post('/validateMnemoricPhrase', async (req, res) => {
+    console.log(req.body.mnemoric);
     const isVerifed = bip39.validateMnemonic(req.body.mnemoric);
     if (!isVerifed) {
         return res.json({
@@ -248,6 +249,7 @@ app.post('/validateMnemoricPhrase', async (req, res) => {
     return res.json({
         hdkey: root.toJSON(),
         publicKey: root.publicKey.toString('hex'),
+        note: true,
     });
 });
 
