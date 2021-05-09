@@ -1,17 +1,25 @@
 import express from 'express';
 import sha256 from 'sha256';
-import { v4 as uuid } from 'uuid';
 import axios from 'axios';
 import forge from 'node-forge';
+import hdkey from 'hdkey';
+const bip39 = require('bip39');
+import cors from 'cors';
 require('dotenv').config();
 
 import Blockchain from './Blockchain';
-
 const app = express();
+app.use(cors());
+app.use(express.json());
 
 const MyCoin = new Blockchain();
-const privateKey = uuid().split('-').join('');
-const publicKey = sha256(privateKey);
+const seed = bip39.mnemonicToSeedSync(
+    'pizza hero sister arrow square village chronic special vendor castle smooth device'
+);
+const root = hdkey.fromMasterSeed(seed);
+const privateKey = root.privateKey.toString('hex');
+const publicKey = root.publicKey.toString('hex');
+
 const master = MyCoin.createNewTransaction(1000000, 'system-reward', publicKey);
 
 MyCoin.chain[0].transactions.push(master); // First transaction at first block
@@ -22,7 +30,14 @@ const server = app.listen(port, () => {
 });
 
 const nodes: any = [];
-const io = require('socket.io')(server);
+const io = require('socket.io')(server, {
+    cors: {
+        origin: process.env.CLIENT_URL,
+        methods: ['GET', 'POST'],
+        allowedHeaders: ['my-custom-header'],
+        credentials: true,
+    },
+});
 
 io.on('connection', (socket: any) => {
     nodes.push(new Blockchain(socket.id));
@@ -47,20 +62,13 @@ io.on('connection', (socket: any) => {
             sender !== 'system-reward: new user' &&
             sender !== 'system-reward: invitation confirmed'
         ) {
-            const privateKey_Is_Valid = sha256(req.body.privKey) === req.body.sender; //
-            if (!privateKey_Is_Valid) {
-                flag = false;
-                res.json({
-                    note: false,
-                });
-            }
             /*  -Authentication: check if user have the require amount of coins for current transaction && if user exist in the blockchain-  */
             const addressDataOfSender = MyCoin.getAddressData(req.body.sender);
-            const addressDataOfRecipient = MyCoin.getAddressData(req.body.recipient);
+            // const addressDataOfRecipient = MyCoin.getAddressData(req.body.recipient);
             if (
                 addressDataOfSender.addressBalance < amount ||
-                addressDataOfSender === false ||
-                addressDataOfRecipient === false
+                addressDataOfSender === false
+                // addressDataOfRecipient === false
             ) {
                 flag = false;
                 res.json({
@@ -87,45 +95,45 @@ io.on('connection', (socket: any) => {
             MyCoin.addTransactionToPendingTransactions(newTransaction); //put new transaction in global object
             nodes.forEach((socketNode: any) => {
                 socketNode.addTransactionToPendingTransactions(newTransaction);
-                io.clients().sockets[socketNode.socketId.toString()].pendingTransactions =
-                    socketNode.pendingTransactions; //add property to socket
+                // io.sockets[socketNode.socketId.toString()].pendingTransactions =
+                //     socketNode.pendingTransactions; //add property to socket
                 pt = socketNode.pendingTransactions;
             });
-            io.clients().emit('PT', pt); //emit to all sockets
+            io.emit('PT', pt); //emit to all sockets
             res.json({
                 note: `Transaction complete!`,
             });
         }
     });
 
-    // Get pending transaction and mine to a new block
-    // Broadcast to everyone for verifying
-    // If valid => receive reward
-    app.get('/mine', (req: any, res: any) => {
+    app.post('/mine', (req: any, res: any) => {
+        const { clientHdKey } = req.body;
+        const root = hdkey.fromJSON(clientHdKey);
+        const publicKey = root.publicKey.toString();
+
         const lastBlock = MyCoin.getLastBlock();
         const previousBlockHash = lastBlock['hash'];
 
         const currentBlockData = {
-            transactions: MyCoin.pendingTransactions,
-            index: lastBlock['index'] + 1, // weird?????
+            transactions: [
+                ...MyCoin.pendingTransactions,
+                MyCoin.createNewTransaction(12.5, 'system-reward', publicKey),
+            ],
+            index: lastBlock['index'] + 1,
         };
 
         const nonce = MyCoin.proofOfWork(previousBlockHash, currentBlockData); //doing a proof of work (maybe currentBlockData.transactions)
         const blockHash = MyCoin.hashBlock(previousBlockHash, currentBlockData, nonce); //hash the block
-        const newBlock = MyCoin.createNewBlock(nonce, previousBlockHash, blockHash); //create a new block with params
+        const newBlock = MyCoin.createNewBlock(
+            nonce,
+            previousBlockHash,
+            blockHash,
+            currentBlockData.transactions
+        ); //create a new block with params
 
         axios
             .post(MyCoin.currentNodeUrl + '/receive-new-block', {
                 newBlock,
-            })
-            .then(() => {
-                axios.post(MyCoin.currentNodeUrl + '/transaction/broadcast', {
-                    amount: 12.5,
-                    sender: 'system-reward',
-                    recipient: publicKey, // TODO: Change here
-                });
-
-                return axios;
             })
             .then(() => {
                 res.json({
@@ -159,7 +167,7 @@ io.on('connection', (socket: any) => {
     });
 
     app.get('/emitMiningSuccess', (req, res) => {
-        io.clients().emit('mineSuccess', true); //emit to all sockets
+        io.emit('mineSuccess', true); //emit to all sockets
     });
 
     app.get('/pendingTransactions', (req, res) => {
@@ -219,6 +227,34 @@ function search(nameKey: any, myArray: any) {
     }
 }
 
+app.get('/generateMnemoricPhrase', async (req, res) => {
+    const mnemonic = bip39.generateMnemonic();
+
+    return res.json({
+        mnemonic,
+    });
+});
+
+app.post('/validateMnemoricPhrase', async (req, res) => {
+    const isVerifed = bip39.validateMnemonic(req.body.mnemoric);
+    if (!isVerifed) {
+        return res.json({
+            note: false,
+        });
+    }
+
+    const seed = await bip39.mnemonicToSeed(req.body.mnemoric);
+    const root = hdkey.fromMasterSeed(seed);
+    return res.json({
+        hdkey: root.toJSON(),
+        publicKey: root.publicKey.toString('hex'),
+    });
+});
+
+app.get('/blockchain', (req, res) => {
+    res.json(MyCoin);
+});
+
 /*  -get block by blockHash-  */
 app.get('/block/:blockHash', (req, res) => {
     const blockHash = req.params.blockHash;
@@ -246,5 +282,3 @@ app.get('/address/:address', (req, res) => {
         addressData: addressData,
     });
 });
-
-console.log(MyCoin);

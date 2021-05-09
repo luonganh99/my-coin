@@ -15,16 +15,21 @@ export default class Blockchain {
         this.chain = [];
         this.pendingTransactions = [];
         this.currentNodeUrl = currentNodeUrl;
-        this.networkNodes = [];
-        this.createNewBlock(100, '0', '0');
+        this.networkNodes = []; // TODO: weird?
+        this.createNewBlock(100, '0', '0', []);
     }
 
-    public createNewBlock(nonce: number, previousBlockHash: string, hash: string) {
+    public createNewBlock(
+        nonce: number,
+        previousBlockHash: string,
+        hash: string,
+        transactions: any
+    ) {
         const newBlock = new Block(
             this.chain.length + 1,
             Date.now(),
             new Date().toString(),
-            this.pendingTransactions,
+            transactions,
             nonce,
             hash,
             previousBlockHash
@@ -78,6 +83,7 @@ export default class Blockchain {
     }
 
     public chainIsValid(blockchain: Array<any>) {
+        // TODO: change
         let validChain = true;
 
         for (var i = 1; i < blockchain.length; i++) {
