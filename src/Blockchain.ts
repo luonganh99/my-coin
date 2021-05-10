@@ -7,6 +7,7 @@ export default class Blockchain {
     public socketId: string;
     public chain: Array<any>;
     public pendingTransactions: Array<any>;
+    public transactions: Array<any>;
     public networkNodes: Array<any>;
     public currentNodeUrl: any;
 
@@ -14,6 +15,7 @@ export default class Blockchain {
         this.socketId = socketId;
         this.chain = [];
         this.pendingTransactions = [];
+        this.transactions = [];
         this.currentNodeUrl = currentNodeUrl;
         this.networkNodes = []; // TODO: weird?
         this.createNewBlock(100, '0', '0', []);

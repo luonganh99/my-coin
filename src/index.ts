@@ -21,7 +21,7 @@ const privateKey = root.privateKey.toString('hex');
 const publicKey = root.publicKey.toString('hex');
 
 const master = MyCoin.createNewTransaction(1000000, 'system-reward', publicKey);
-
+MyCoin.transactions.push(master);
 MyCoin.chain[0].transactions.push(master); // First transaction at first block
 const port = process.env.PORT || process.argv[2];
 
@@ -46,6 +46,7 @@ io.on('connection', (socket: any) => {
     console.log(socket.id);
 
     app.post('/transaction/broadcast', (req: any, res: any) => {
+        // console.log(req.body.amount);
         const amount = parseFloat(req.body.amount);
         // weird ???
         const newTransaction = nodes[nodes.length - 1].createNewTransaction(
@@ -130,6 +131,7 @@ io.on('connection', (socket: any) => {
             blockHash,
             currentBlockData.transactions
         ); //create a new block with params
+        MyCoin.transactions.push(currentBlockData.transactions);
 
         axios
             .post(MyCoin.currentNodeUrl + '/receive-new-block', {
@@ -247,7 +249,7 @@ app.post('/validateMnemoricPhrase', async (req, res) => {
     const seed = await bip39.mnemonicToSeed(req.body.mnemoric);
     const root = hdkey.fromMasterSeed(seed);
     return res.json({
-        hdkey: root.toJSON(),
+        hdKey: root.toJSON(),
         publicKey: root.publicKey.toString('hex'),
         note: true,
     });
