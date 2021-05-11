@@ -41,6 +41,24 @@ export default class Blockchain {
         return newBlock;
     }
 
+    public createNewBlockWithoutAdd(
+        nonce: number,
+        previousBlockHash: string,
+        hash: string,
+        transactions: any
+    ) {
+        const newBlock = new Block(
+            this.chain.length + 1,
+            Date.now(),
+            new Date().toString(),
+            transactions,
+            nonce,
+            hash,
+            previousBlockHash
+        );
+        return newBlock;
+    }
+
     public getLastBlock() {
         return this.chain[this.chain.length - 1];
     }
@@ -49,12 +67,7 @@ export default class Blockchain {
         const newTransaction = {
             transactionId: uuid().split('-').join(''),
             amount: amount,
-            date:
-                new Date().getDay().toString() +
-                '.' +
-                new Date().getMonth().toString() +
-                '.' +
-                new Date().getFullYear().toString(),
+            date: new Date(),
             sender: sender,
             recipient: recipient,
         };

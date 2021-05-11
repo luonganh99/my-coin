@@ -13,8 +13,9 @@ app.use(cors());
 app.use(express.json());
 
 const MyCoin = new Blockchain();
+//TODO:
 const seed = bip39.mnemonicToSeedSync(
-    'pizza hero sister arrow square village chronic special vendor castle smooth device'
+    'brief accident carry stable kid viable veteran exchange brown permit zebra annual'
 );
 const root = hdkey.fromMasterSeed(seed);
 const privateKey = root.privateKey.toString('hex');
@@ -93,11 +94,9 @@ io.on('connection', (socket: any) => {
 
         if (amount > 0 && flag === true) {
             var pt = null;
-            MyCoin.addTransactionToPendingTransactions(newTransaction); //put new transaction in global object
+            MyCoin.addTransactionToPendingTransactions(newTransaction);
             nodes.forEach((socketNode: any) => {
                 socketNode.addTransactionToPendingTransactions(newTransaction);
-                // io.sockets[socketNode.socketId.toString()].pendingTransactions =
-                //     socketNode.pendingTransactions; //add property to socket
                 pt = socketNode.pendingTransactions;
             });
             io.emit('PT', pt); //emit to all sockets
@@ -109,8 +108,9 @@ io.on('connection', (socket: any) => {
 
     app.post('/mine', (req: any, res: any) => {
         const { clientHdKey } = req.body;
+
         const root = hdkey.fromJSON(clientHdKey);
-        const publicKey = root.publicKey.toString();
+        const publicKey = root.publicKey.toString('hex');
 
         const lastBlock = MyCoin.getLastBlock();
         const previousBlockHash = lastBlock['hash'];
@@ -125,44 +125,56 @@ io.on('connection', (socket: any) => {
 
         const nonce = MyCoin.proofOfWork(previousBlockHash, currentBlockData); //doing a proof of work (maybe currentBlockData.transactions)
         const blockHash = MyCoin.hashBlock(previousBlockHash, currentBlockData, nonce); //hash the block
-        const newBlock = MyCoin.createNewBlock(
+        const newBlock = MyCoin.createNewBlockWithoutAdd(
             nonce,
             previousBlockHash,
             blockHash,
             currentBlockData.transactions
         ); //create a new block with params
-        MyCoin.transactions.push(currentBlockData.transactions);
 
         axios
             .post(MyCoin.currentNodeUrl + '/receive-new-block', {
                 newBlock,
             })
-            .then(() => {
-                res.json({
-                    note: 'New block mined and broadcast successfully',
-                    block: newBlock,
-                });
+            .then((response: any) => {
+                if (response.data.note) {
+                    res.json({
+                        note: true,
+                        block: newBlock,
+                    });
+                    io.emit('PT', MyCoin.pendingTransactions);
+                    io.emit('T', MyCoin.transactions);
+                    io.emit('B', MyCoin.chain);
+                    console.log('okeee');
+                    return;
+                }
             });
     });
 
     // Check validity of new block
-    // TODO: Too simple ?
     app.post('/receive-new-block', (req, res) => {
         const newBlock = req.body.newBlock;
         const lastBlock = MyCoin.getLastBlock();
         const correctHash = lastBlock.hash === newBlock.previousBlockHash;
         const correctIndex = lastBlock['index'] + 1 === newBlock['index'];
 
+        console.log('newBlock ', newBlock);
+        console.log('lastBlock ', lastBlock);
+        console.log('correctHash ', correctHash);
+        console.log('correctIndex ', correctIndex);
+
         if (correctHash && correctIndex) {
             MyCoin.chain.push(newBlock);
             MyCoin.pendingTransactions = [];
+            MyCoin.transactions = MyCoin.transactions.concat(newBlock.transactions);
+
             res.json({
-                note: 'New block received and accepted.',
+                note: true,
                 newBlock: newBlock,
             });
         } else {
             res.json({
-                note: 'New block rejected',
+                note: false,
                 newBlock: newBlock,
             });
         }
@@ -229,7 +241,7 @@ function search(nameKey: any, myArray: any) {
     }
 }
 
-app.get('/generateMnemoricPhrase', async (req, res) => {
+app.get('/generateMnemonicPhrase', async (req, res) => {
     const mnemonic = bip39.generateMnemonic();
 
     return res.json({
@@ -237,16 +249,15 @@ app.get('/generateMnemoricPhrase', async (req, res) => {
     });
 });
 
-app.post('/validateMnemoricPhrase', async (req, res) => {
-    console.log(req.body.mnemoric);
-    const isVerifed = bip39.validateMnemonic(req.body.mnemoric);
+app.post('/validateMnemonicPhrase', async (req, res) => {
+    const isVerifed = bip39.validateMnemonic(req.body.mnemonic);
     if (!isVerifed) {
         return res.json({
             note: false,
         });
     }
 
-    const seed = await bip39.mnemonicToSeed(req.body.mnemoric);
+    const seed = await bip39.mnemonicToSeed(req.body.mnemonic);
     const root = hdkey.fromMasterSeed(seed);
     return res.json({
         hdKey: root.toJSON(),
@@ -259,7 +270,6 @@ app.get('/blockchain', (req, res) => {
     res.json(MyCoin);
 });
 
-/*  -get block by blockHash-  */
 app.get('/block/:blockHash', (req, res) => {
     const blockHash = req.params.blockHash;
     const correctBlock = MyCoin.getBlock(blockHash);
@@ -268,7 +278,6 @@ app.get('/block/:blockHash', (req, res) => {
     });
 });
 
-/*  -get transaction by transactionId-  */
 app.get('/transaction/:transactionId', (req, res) => {
     const transactionId = req.params.transactionId;
     const trasactionData = MyCoin.getTransaction(transactionId);
@@ -278,7 +287,6 @@ app.get('/transaction/:transactionId', (req, res) => {
     });
 });
 
-/*  -get address by address-  */
 app.get('/address/:address', (req, res) => {
     const address = req.params.address;
     const addressData = MyCoin.getAddressData(address);
