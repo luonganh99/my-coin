@@ -1,11 +1,12 @@
 import { v4 as uuid } from 'uuid';
 import sha256 from 'sha256';
 import Block from './Block';
+import Transaction from './Transaction';
 const currentNodeUrl = process.env.URL || process.argv[3];
 
 export default class Blockchain {
     public socketId: string;
-    public chain: Array<any>;
+    public chain: Array<Block>;
     public pendingTransactions: Array<any>;
     public transactions: Array<any>;
     public networkNodes: Array<any>;
@@ -17,7 +18,7 @@ export default class Blockchain {
         this.pendingTransactions = [];
         this.transactions = [];
         this.currentNodeUrl = currentNodeUrl;
-        this.networkNodes = []; // TODO: weird?
+        this.networkNodes = [];
         this.createNewBlock(100, '0', '0', []);
     }
 
@@ -64,15 +65,7 @@ export default class Blockchain {
     }
 
     public createNewTransaction(amount: number, sender: any, recipient: any) {
-        const newTransaction = {
-            transactionId: uuid().split('-').join(''),
-            amount: amount,
-            date: new Date(),
-            sender: sender,
-            recipient: recipient,
-        };
-
-        return newTransaction;
+        return new Transaction(amount, sender, recipient);
     }
 
     public addTransactionToPendingTransactions(transactionObject: any) {
